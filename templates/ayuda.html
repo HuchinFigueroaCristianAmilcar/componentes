@@ -1,22 +1,22 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
+
 {% block contenido %}
-<section class="card shadow-sm">
-<div class="card-body p-4">
-<h2 class="h4">Ayuda del registro</h2>
-<p class="text-secondary">Fecha del equipo: {{ fecha }}</p>
-<div class="alert alert-info" role="note">
-Utiliza datos ficticios durante la práctica.
-</div>
-<ol class="mb-4">
-<li>En Registrar, escribe nombre, grupo y selecciona turno.</li>
-<li>Presiona Guardar alumno y consulta la lista.</li>
-<li>Usa Editar para corregir los datos de un alumno.</li>
-<li>Usa Eliminar solo con tus registros de prueba.</li>
-<li>En pantalla pequeña, abre el menú con su botón.</li>
-</ol>
-<a class="btn btn-primary" href="{{ url_for('inicio') }}">
-Volver al registro
-</a>
-</div>
+<section class="card shadow-sm col-lg-8 mx-auto">
+  <div class="card-body p-4">
+    <h2 class="h4 card-title mb-3">Ayuda - Catálogo de Componentes PC</h2>
+    <p class="text-muted small">Fecha de consulta: {{ fecha }}</p>
+
+    <h3 class="h5 mt-4">¿Cómo utilizar este catálogo?</h3>
+    <ol class="list-group list-group-numbered mb-4">
+      <li class="list-group-item"><strong>Registrar un componente:</strong> Llena el formulario con el nombre del componente, su categoría y selecciona su estado (Disponible o Agotado).</li>
+      <li class="list-group-item"><strong>Visualizar la lista:</strong> Consulta los componentes registrados en la tabla principal con su respectivo indicador de disponibilidad.</li>
+      <li class="list-group-item"><strong>Editar un registro:</strong> Da clic en el botón "Editar" de un componente para modificar su nombre, categoría o estado.</li>
+      <li class="list-group-item"><strong>Eliminar registros:</strong> Utiliza el botón "Eliminar" en la tabla para remover componentes de prueba o fuera de stock.</li>
+    </ol>
+
+    <div class="d-flex gap-2">
+      <a href="{{ url_for('inicio') }}" class="btn btn-primary">Volver al Inicio</a>
+    </div>
+  </div>
 </section>
 {% endblock %}

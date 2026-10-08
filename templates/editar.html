@@ -8,19 +8,19 @@
 <form method="post"
 action="{{ url_for('editar', id=articulo._id) }}">
 <div class="mb-3">
-<label for="nombre" class="form-label">Nombre del componente</label>
+<label for="nombre" class="form-label">Producto</label>
 <input id="nombre" name="nombre" class="form-control"
 value="{{ articulo.nombre }}" required maxlength="80">
 </div>
 <div class="mb-3">
 <label for="categoria" class="form-label">Categoría</label>
 <input id="categoria" name="categoria" class="form-control"
-value="{{ articulo.categoria }}" required maxlength="50">
+value="{{ articulo.categoria }}" required maxlength="20">
 </div>
 <div class="mb-3">
 <label for="estado" class="form-label">Estado</label>
 <select id="estado" name="estado" class="form-select" required>
-<option value="">Selecciona un estado</option>
+<option value="">Selecciona</option>
 {% for opcion in ['Disponible', 'Agotado'] %}
 <option value="{{ opcion }}"
 {% if articulo.get('estado') == opcion %}selected{% endif %}>

@@ -20,28 +20,29 @@ cliente = MongoClient(mongo_uri, serverSelectionTimeoutMS=10000)
 base_datos = cliente["componentes"]
 articulos = base_datos["articulos"]
 
-def leer_formulario():
-    nombre = request.form.get("nombre", "").strip()
-    categoria = request.form.get("categoria", "").strip()
-    estado = request.form.get("estado", "").strip()
-
+def leer_formulario(datos=None):
+    if datos is None:
+        datos = request.form
+    campos = ("nombre", "categoria", "estado")
+    if any(not isinstance(datos.get(c, ""), str) for c in campos):
+        abort(400, description="Los campos deben contener texto.")
+    nombre = datos.get("nombre", "").strip()
+    categoria = datos.get("categoria", "").strip()
+    estado = datos.get("estado", "").strip()
     if not nombre or not categoria or not estado:
-        abort(400, description="Completa el nombre, categoría y estado del componente.")
-
-    if len(nombre) > 80 or len(categoria) > 50:
-        abort(400, description="Usa hasta 80 caracteres en nombre y 50 en categoría.")
-
+        abort(400, description="Completa nombre, categoría y estado.")
+    if len(nombre) > 80 or len(categoria) > 20:
+        abort(400, description="Máximo: nombre 80 y categoría 20.")
     if estado not in ["Disponible", "Agotado"]:
-        abort(400, description="Selecciona un estado válido (Disponible o Agotado).")
-
-    return {"nombre": nombre, "categoria": categoria, "estado": estado}   
+        abort(400, description="Selecciona un estado válido.")
+    return {"nombre": nombre, "categoria": categoria, "estado": estado}
 
 def buscar_articulo(id):
     if not ObjectId.is_valid(id):
-        abort(404, description="La clave del artículo no es válida.")
+        abort(404, description="La clave del producto no es válida.")
     articulo = articulos.find_one({"_id": ObjectId(id)})
     if articulo is None:
-        abort(404, description="Este artículo ya no existe.")
+        abort(404, description="Este producto ya no existe.")
     return articulo
 
 @app.route("/")
