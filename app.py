@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, abort
+from flask import Flask, render_template, request, redirect, url_for, abort, jsonify
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 from bson import ObjectId
@@ -73,17 +73,62 @@ def eliminar(id):
 
 @app.errorhandler(PyMongoError)
 def error_mongo(error):
-    return render_template("error.html", mensaje="No fue posible conectar con la base de datos"), 503
+    mensaje = "No fue posible conectar con la base de datos."
+    if request.path.startswith("/api/"):
+        return jsonify({"error": mensaje}), 503
+    return render_template("error.html", mensaje=mensaje), 503
 
 @app.errorhandler(400)
 @app.errorhandler(404)
+@app.errorhandler(405)
 def error_peticion(error):
-    return render_template("error.html", mensaje=error.description), error.code
+    if request.path.startswith("/api/"):
+        return jsonify({"error": error.description}), error.code
+    return render_template(
+        "error.html", mensaje=error.description
+    ), error.code
 
 @app.route("/ayuda")
 def ayuda():
     fecha = datetime.now().strftime("%d/%m/%Y")
     return render_template("ayuda.html", fecha=fecha)
+
+# API REST - Parte 1
+def producto_json(producto):
+    return {
+        "id": str(producto["_id"]),
+        "nombre": producto["nombre"],
+        "categoria": producto["categoria"],
+        "estado": producto["estado"]
+    }
+
+def leer_json():
+    datos = request.get_json(silent=True)
+    if not isinstance(datos, dict):
+        abort(400, description="Envía un objeto JSON válido.")
+    return leer_formulario(datos)
+
+@app.route("/api/productos", methods=["GET", "POST"])
+def api_productos():
+    if request.method == "POST":
+        datos = leer_json()
+        resultado = articulos.insert_one(datos)
+        producto = buscar_articulo(str(resultado.inserted_id))
+        return jsonify(producto_json(producto)), 201
+    lista = articulos.find().sort("nombre", 1)
+    return jsonify([producto_json(p) for p in lista])
+
+@app.route("/api/productos/<id>", methods=["GET", "PUT", "DELETE"])
+def api_producto(id):
+    producto = buscar_articulo(id)
+    if request.method == "PUT":
+        datos = leer_json()
+        articulos.update_one({"_id": producto["_id"]}, {"$set": datos})
+        return jsonify(producto_json(buscar_articulo(id)))
+    if request.method == "DELETE":
+        articulos.delete_one({"_id": producto["_id"]})
+        return "", 204
+    return jsonify(producto_json(producto))
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=False)
