@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block titulo %}Pedido {{ pedido.referencia }} · Componentes PC{% endblock %}
+
+{% block contenido %}
+<div class="col-lg-8 mx-auto">
+  <div class="panel confirm">
+    <div class="confirm-icon" aria-hidden="true">✓</div>
+    <h1>¡Gracias por tu compra!</h1>
+    <p class="text-secondary">Tu pedido <strong>{{ pedido.referencia }}</strong> quedó registrado el {{ pedido.fecha.strftime('%d/%m/%Y %H:%M') }}.</p>
+    <span class="status {{ 'status-on' if pedido.estado == 'Pagado' else 'status-wait' }}">{{ pedido.estado }}</span>
+
+    {% if pedido.metodo != 'tarjeta' %}
+    <div class="note mt-3">
+      Para completar tu pago {{ 'por transferencia SPEI' if pedido.metodo == 'transferencia' else 'en efectivo en tienda' }}, usa la referencia
+      <strong>{{ pedido.referencia }}</strong> por <strong>{{ pedido.total|dinero }}</strong>. (Datos de pago de demostración.)
+    </div>
+    {% endif %}
+
+    <hr>
+    <h2 class="h6 text-uppercase text-secondary">Productos</h2>
+    <ul class="list-unstyled order-lines">
+      {% for i in pedido['items'] %}
+      <li><span>{{ i.cantidad }} × {{ i.nombre }}</span><span>{{ (i.precio * i.cantidad)|dinero }}</span></li>
+      {% endfor %}
+    </ul>
+    <dl class="summary">
+      <div><dt>Subtotal</dt><dd>{{ pedido.subtotal|dinero }}</dd></div>
+      <div><dt>Envío</dt><dd>{{ pedido.envio|dinero if pedido.envio else 'Gratis' }}</dd></div>
+      <div class="grand"><dt>Total</dt><dd>{{ pedido.total|dinero }}</dd></div>
+    </dl>
+    <hr>
+    <div class="row g-3 small">
+      <div class="col-md-6"><h2 class="h6 text-uppercase text-secondary">Enviar a</h2>
+        {{ pedido.envio_a.nombre }}<br>{{ pedido.envio_a.direccion }}<br>{{ pedido.envio_a.ciudad }}, CP {{ pedido.envio_a.cp }}<br>Tel. {{ pedido.envio_a.telefono }}</div>
+      <div class="col-md-6"><h2 class="h6 text-uppercase text-secondary">Pago</h2>
+        {% if pedido.metodo == 'tarjeta' %}Tarjeta terminación {{ pedido.get('tarjeta_ultimos4', '····') }}{% elif pedido.metodo == 'transferencia' %}Transferencia SPEI{% else %}Efectivo en tienda{% endif %}</div>
+    </div>
+    <div class="d-flex gap-2 mt-4 flex-wrap">
+      <a class="btn btn-primary" href="{{ url_for('productos') }}">Seguir comprando</a>
+      <a class="btn btn-ghost" href="{{ url_for('mis_pedidos') }}">Ver mis pedidos</a>
+    </div>
+  </div>
+</div>
+{% endblock %}

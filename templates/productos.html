@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% from "_macros.html" import tarjeta with context %}
+{% block titulo %}Productos · Componentes PC{% endblock %}
+
+{% block encabezado %}
+<header class="page-head">
+  <h1>Productos</h1>
+  <p>{{ articulos|length }} resultado{{ '' if articulos|length == 1 else 's' }}{% if categoria %} en <strong>{{ categoria }}</strong>{% endif %}{% if q %} para «{{ q }}»{% endif %}</p>
+</header>
+{% endblock %}
+
+{% block contenido %}
+<form method="get" class="filters" role="search">
+  <div class="filters-search">
+    <label for="q" class="visually-hidden">Buscar</label>
+    <input id="q" name="q" type="search" class="form-control" placeholder="Buscar componente…" value="{{ q }}" maxlength="60">
+  </div>
+  <div>
+    <label for="categoria" class="visually-hidden">Categoría</label>
+    <select id="categoria" name="categoria" class="form-select">
+      <option value="">Todas las categorías</option>
+      {% for c in categorias %}<option value="{{ c }}" {% if c == categoria %}selected{% endif %}>{{ c }}</option>{% endfor %}
+    </select>
+  </div>
+  <div>
+    <label for="orden" class="visually-hidden">Ordenar</label>
+    <select id="orden" name="orden" class="form-select">
+      <option value="nombre" {% if orden == 'nombre' %}selected{% endif %}>Nombre A-Z</option>
+      <option value="precio_asc" {% if orden == 'precio_asc' %}selected{% endif %}>Precio: menor a mayor</option>
+      <option value="precio_desc" {% if orden == 'precio_desc' %}selected{% endif %}>Precio: mayor a menor</option>
+    </select>
+  </div>
+  <button class="btn btn-primary" type="submit">Filtrar</button>
+  {% if q or categoria or orden != 'nombre' %}<a class="btn btn-ghost" href="{{ url_for('productos') }}">Limpiar</a>{% endif %}
+</form>
+
+{% if articulos %}
+<div class="row g-3 g-lg-4">
+  {% for item in articulos %}
+  <div class="col-6 col-md-4 col-xl-3">{{ tarjeta(item) }}</div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty"><p class="mb-3">No encontramos productos con esos filtros.</p><a class="btn btn-ghost" href="{{ url_for('productos') }}">Ver todos</a></div>
+{% endif %}
+{% endblock %}

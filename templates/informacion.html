@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block titulo %}Información · Componentes PC{% endblock %}
+{% block encabezado %}<header class="page-head"><h1>Información</h1><p>Todo lo que necesitas saber antes y después de comprar.</p></header>{% endblock %}
+{% block contenido %}
+<div class="row g-3 g-lg-4 mb-5">
+  <div class="col-md-6 col-xl-3"><div class="panel info-card"><div class="info-ico">🚚</div><h2>Envíos</h2>
+    <p>Enviamos a todo México. El costo es de {{ envio_costo|dinero }} y es <strong>gratis desde {{ envio_gratis|dinero }}</strong>. Despachamos en 24 a 48 horas hábiles.</p></div></div>
+  <div class="col-md-6 col-xl-3"><div class="panel info-card"><div class="info-ico">💳</div><h2>Formas de pago</h2>
+    <p>Tarjeta de crédito o débito, transferencia SPEI y pago en efectivo en tienda con referencia. Todos los precios están en pesos mexicanos con IVA incluido.</p></div></div>
+  <div class="col-md-6 col-xl-3"><div class="panel info-card"><div class="info-ico">🛡️</div><h2>Garantía</h2>
+    <p>Todos los componentes incluyen garantía contra defectos de fabricación. El plazo depende de la marca y se indica en cada producto.</p></div></div>
+  <div class="col-md-6 col-xl-3"><div class="panel info-card"><div class="info-ico">↩️</div><h2>Devoluciones</h2>
+    <p>Tienes 15 días naturales para devolver productos sin usar y en su empaque original.</p></div></div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <h2 class="h4 mb-3">Preguntas frecuentes</h2>
+    <div class="accordion faq" id="faq">
+      {% set faqs = [
+        ('¿Necesito una cuenta para comprar?', 'Puedes armar tu carrito sin cuenta, pero necesitas iniciar sesión para pagar y así poder consultar tus pedidos.'),
+        ('¿Cómo sé si una pieza es compatible con mi equipo?', 'Revisa el socket del procesador y la tarjeta madre, el tipo de memoria (DDR4 o DDR5) y la potencia de tu fuente. Si tienes dudas, escríbenos antes de comprar.'),
+        ('¿Cuándo llega mi pedido?', 'Una vez despachado, normalmente llega en 3 a 6 días hábiles según tu ciudad.'),
+        ('¿Puedo pagar en efectivo?', 'Sí. Elige «Efectivo» al pagar y te daremos una referencia para pagar en tienda. El pedido se procesa al confirmar el pago.'),
+        ('¿Mis datos de tarjeta están seguros?', 'En esta versión de demostración el pago es simulado: no se cobra ni se almacena el número completo de tu tarjeta.')
+      ] %}
+      {% for pregunta, respuesta in faqs %}
+      <div class="accordion-item">
+        <h3 class="accordion-header">
+          <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#f{{ loop.index }}" aria-expanded="{{ 'true' if loop.first else 'false' }}" aria-controls="f{{ loop.index }}">{{ pregunta }}</button>
+        </h3>
+        <div id="f{{ loop.index }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" data-bs-parent="#faq">
+          <div class="accordion-body">{{ respuesta }}</div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <h2 class="h4 mb-3">Contacto</h2>
+    <div class="panel">
+      <ul class="list-unstyled contact mb-0">
+        <li><strong>Correo</strong><span>contacto@componentespc.example</span></li>
+        <li><strong>Teléfono</strong><span>(998) 000 0000</span></li>
+        <li><strong>Horario</strong><span>Lunes a viernes, 9:00 a 18:00</span></li>
+        <li><strong>Ubicación</strong><span>Cancún, Quintana Roo</span></li>
+      </ul>
+      <p class="small text-secondary mt-3 mb-0">Datos de ejemplo: reemplázalos por los de tu negocio en <code>templates/informacion.html</code>.</p>
+    </div>
+  </div>
+</div>
+{% endblock %}

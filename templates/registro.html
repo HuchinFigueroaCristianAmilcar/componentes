@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block titulo %}Crear cuenta · Componentes PC{% endblock %}
+{% block contenido %}
+<div class="auth-wrap">
+  <div class="panel auth-card">
+    <h1>Crear cuenta</h1>
+    <p class="text-secondary">Compra más rápido y consulta tu historial.</p>
+    <form method="post" action="{{ url_for('registro') }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <div class="mb-3"><label class="form-label" for="nombre">Nombre</label>
+        <input class="form-control" id="nombre" name="nombre" required maxlength="60" autocomplete="name" value="{{ nombre }}" autofocus></div>
+      <div class="mb-3"><label class="form-label" for="email">Correo electrónico</label>
+        <input class="form-control" id="email" name="email" type="email" required maxlength="120" autocomplete="email" value="{{ email }}"></div>
+      <div class="mb-3"><label class="form-label" for="password">Contraseña <span class="text-secondary small">(mínimo 8 caracteres)</span></label>
+        <input class="form-control" id="password" name="password" type="password" required minlength="8" autocomplete="new-password"></div>
+      <div class="mb-3"><label class="form-label" for="password2">Repite la contraseña</label>
+        <input class="form-control" id="password2" name="password2" type="password" required minlength="8" autocomplete="new-password"></div>
+      <button class="btn btn-primary btn-lg w-100" type="submit">Crear cuenta</button>
+    </form>
+    <p class="text-center small mt-3 mb-0">¿Ya tienes cuenta? <a href="{{ url_for('login') }}">Inicia sesión</a></p>
+  </div>
+</div>
+{% endblock %}

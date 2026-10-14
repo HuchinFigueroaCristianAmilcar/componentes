@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% from "_macros.html" import imagen_producto with context %}
+{% block titulo %}Carrito · Componentes PC{% endblock %}
+
+{% block encabezado %}<header class="page-head"><h1>Tu carrito</h1></header>{% endblock %}
+
+{% block contenido %}
+{% if lineas %}
+<div class="row g-4">
+  <div class="col-lg-8">
+    <div class="panel">
+      {% for l in lineas %}
+      <div class="cart-line">
+        <a href="{{ url_for('producto', id=l.id) }}" class="cart-thumb">{{ imagen_producto(l.articulo, 'prod-img-sm') }}</a>
+        <div class="cart-info">
+          <a class="cart-name" href="{{ url_for('producto', id=l.id) }}">{{ l.articulo.nombre }}</a>
+          <div class="small text-secondary">{{ l.articulo.categoria }} · {{ l.precio|dinero }} c/u</div>
+          {% if not l.disponible %}<div class="small text-danger fw-semibold">No disponible: quítalo para continuar.</div>{% endif %}
+        </div>
+        <form action="{{ url_for('carrito_actualizar', id=l.id) }}" method="post" class="qty-form">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <label class="visually-hidden" for="c{{ loop.index }}">Cantidad</label>
+          <select id="c{{ loop.index }}" name="cantidad" class="form-select form-select-sm" onchange="this.form.submit()">
+            {% for n in range(1, 11) %}<option value="{{ n }}" {% if n == l.cantidad %}selected{% endif %}>{{ n }}</option>{% endfor %}
+          </select>
+        </form>
+        <div class="cart-total">{{ l.importe|dinero }}</div>
+        <form action="{{ url_for('carrito_quitar', id=l.id) }}" method="post">
+          <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+          <button class="icon-btn" type="submit" aria-label="Quitar {{ l.articulo.nombre }}" title="Quitar">✕</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="d-flex justify-content-between mt-3">
+      <a href="{{ url_for('productos') }}" class="btn btn-ghost">← Seguir comprando</a>
+      <form action="{{ url_for('carrito_vaciar') }}" method="post">
+        <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+        <button class="btn btn-link text-secondary" type="submit">Vaciar carrito</button>
+      </form>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <aside class="panel summary">
+      <h2>Resumen</h2>
+      <dl>
+        <div><dt>Subtotal</dt><dd>{{ subtotal|dinero }}</dd></div>
+        <div><dt>Envío</dt><dd>{% if envio == 0 %}<span class="text-success fw-semibold">Gratis</span>{% else %}{{ envio|dinero }}{% endif %}</dd></div>
+        <div class="grand"><dt>Total</dt><dd>{{ total|dinero }}</dd></div>
+      </dl>
+      {% if faltante > 0 %}
+      <div class="ship-bar" role="img" aria-label="Progreso de envío gratis">
+        <div class="ship-fill" style="width: {{ ((subtotal / gratis_desde) * 100)|round|int }}%"></div>
+      </div>
+      <p class="small text-secondary">Agrega {{ faltante|dinero }} más para envío gratis.</p>
+      {% endif %}
+      {% if hay_no_disponibles %}
+      <button class="btn btn-primary w-100" disabled>Pagar</button>
+      {% else %}
+      <a class="btn btn-primary w-100 btn-lg" href="{{ url_for('pago') }}">Continuar al pago</a>
+      {% endif %}
+      {% if not usuario %}<p class="small text-secondary mt-2 mb-0">Te pediremos iniciar sesión para pagar.</p>{% endif %}
+    </aside>
+  </div>
+</div>
+{% else %}
+<div class="empty">
+  <p class="mb-3">Tu carrito está vacío.</p>
+  <a class="btn btn-primary" href="{{ url_for('productos') }}">Explorar productos</a>
+</div>
+{% endif %}
+{% endblock %}

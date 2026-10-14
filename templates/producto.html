@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% from "_macros.html" import tarjeta, imagen_producto with context %}
+{% block titulo %}{{ articulo.nombre }} · Componentes PC{% endblock %}
+
+{% block contenido %}
+{% set precio = articulo.get('precio', 0) or 0 %}
+{% set agotado = articulo.get('estado') != 'Disponible' %}
+<nav aria-label="Ruta" class="crumbs">
+  <a href="{{ url_for('inicio') }}">Inicio</a> / <a href="{{ url_for('productos') }}">Productos</a> /
+  <a href="{{ url_for('productos', categoria=articulo.categoria) }}">{{ articulo.categoria }}</a>
+</nav>
+<div class="row g-4 g-lg-5 mb-5">
+  <div class="col-md-6">{{ imagen_producto(articulo, 'prod-img-lg') }}</div>
+  <div class="col-md-6">
+    <span class="chip">{{ articulo.categoria }}</span>
+    <h1 class="detail-title">{{ articulo.nombre }}</h1>
+    <p class="detail-price">{% if precio > 0 %}{{ precio|dinero }} <small>MXN · IVA incluido</small>{% else %}<small>Precio por definir</small>{% endif %}</p>
+    <p>
+      <span class="status {{ 'status-off' if agotado else 'status-on' }}">{{ articulo.get('estado', 'Sin asignar') }}</span>
+    </p>
+    <p class="detail-desc">{{ articulo.get('descripcion') or 'Componente de alto rendimiento para tu equipo. Consulta nuestra sección de información para envíos y garantía.' }}</p>
+    {% if not agotado and precio > 0 %}
+    <form action="{{ url_for('carrito_agregar', id=articulo._id) }}" method="post" class="buy-form">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <label for="cantidad" class="visually-hidden">Cantidad</label>
+      <select id="cantidad" name="cantidad" class="form-select qty">
+        {% for n in range(1, 11) %}<option value="{{ n }}">{{ n }}</option>{% endfor %}
+      </select>
+      <button class="btn btn-primary btn-lg" type="submit">Agregar al carrito</button>
+      <button class="btn btn-ghost btn-lg" type="submit" name="ir" value="carrito">Comprar ahora</button>
+    </form>
+    {% else %}
+    <button class="btn btn-ghost btn-lg" disabled>No disponible por ahora</button>
+    {% endif %}
+    <ul class="detail-perks list-unstyled">
+      <li>🚚 Envío gratis desde {{ envio_gratis|dinero }}</li>
+      <li>🛡️ Garantía incluida</li>
+      <li>↩️ 15 días para devoluciones</li>
+    </ul>
+    {% if usuario and usuario.rol == 'admin' %}
+    <a class="btn btn-sm btn-outline-warning" href="{{ url_for('editar', id=articulo._id) }}">Editar producto</a>
+    {% endif %}
+  </div>
+</div>
+{% if relacionados %}
+<section>
+  <div class="section-head"><h2>También te puede interesar</h2></div>
+  <div class="row g-3 g-lg-4">
+    {% for item in relacionados %}<div class="col-6 col-md-3">{{ tarjeta(item) }}</div>{% endfor %}
+  </div>
+</section>
+{% endif %}
+{% endblock %}

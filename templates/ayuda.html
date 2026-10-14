@@ -1,22 +1,30 @@
 {% extends "base.html" %}
+{% block titulo %}Ayuda · Componentes PC{% endblock %}
 
 {% block contenido %}
-<section class="card shadow-sm col-lg-8 mx-auto">
-  <div class="card-body p-4">
-    <h2 class="h4 card-title mb-3">Ayuda - Catálogo de Componentes PC</h2>
-    <p class="text-muted small">Fecha de consulta: {{ fecha }}</p>
+<section class="panel col-lg-8 mx-auto">
+  <h1 class="h3 mb-1">Ayuda · Componentes PC</h1>
+  <p class="text-secondary small">Fecha de consulta: {{ fecha }}</p>
 
-    <h3 class="h5 mt-4">¿Cómo utilizar este catálogo?</h3>
-    <ol class="list-group list-group-numbered mb-4">
-      <li class="list-group-item"><strong>Registrar un componente:</strong> Llena el formulario con el nombre del componente, su categoría y selecciona su estado (Disponible o Agotado).</li>
-      <li class="list-group-item"><strong>Visualizar la lista:</strong> Consulta los componentes registrados en la tabla principal con su respectivo indicador de disponibilidad.</li>
-      <li class="list-group-item"><strong>Editar un registro:</strong> Da clic en el botón "Editar" de un componente para modificar su nombre, categoría o estado.</li>
-      <li class="list-group-item"><strong>Eliminar registros:</strong> Utiliza el botón "Eliminar" en la tabla para remover componentes de prueba o fuera de stock.</li>
-    </ol>
+  <h2 class="h5 mt-4">Cómo comprar</h2>
+  <ol class="list-group list-group-numbered mb-4">
+    <li class="list-group-item"><strong>Explora:</strong> busca en <a href="{{ url_for('productos') }}">Productos</a> y filtra por categoría o precio.</li>
+    <li class="list-group-item"><strong>Agrega al carrito:</strong> elige la cantidad y revisa tu resumen en el <a href="{{ url_for('carrito') }}">carrito</a>.</li>
+    <li class="list-group-item"><strong>Inicia sesión:</strong> crea tu cuenta o entra con tu correo para continuar al pago.</li>
+    <li class="list-group-item"><strong>Paga:</strong> captura tus datos de envío y elige tarjeta, transferencia o efectivo.</li>
+    <li class="list-group-item"><strong>Sigue tu pedido:</strong> consulta el estado en <a href="{{ url_for('mis_pedidos') }}">Mis pedidos</a>.</li>
+  </ol>
 
-    <div class="d-flex gap-2">
-      <a href="{{ url_for('inicio') }}" class="btn btn-primary">Volver al Inicio</a>
-    </div>
+  <h2 class="h5 mt-4">Para administradores</h2>
+  <ol class="list-group list-group-numbered mb-4">
+    <li class="list-group-item"><strong>Registrar un componente:</strong> en el <a href="{{ url_for('admin') }}">panel</a>, llena nombre, categoría, precio y estado (Disponible o Agotado).</li>
+    <li class="list-group-item"><strong>Editar:</strong> usa el botón «Editar» para cambiar cualquier dato, incluido el precio.</li>
+    <li class="list-group-item"><strong>Eliminar:</strong> usa «Eliminar» para quitar componentes de prueba o descontinuados.</li>
+  </ol>
+
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{{ url_for('inicio') }}" class="btn btn-primary">Volver al inicio</a>
+    <a href="{{ url_for('informacion') }}" class="btn btn-ghost">Envíos y garantía</a>
   </div>
 </section>
 {% endblock %}

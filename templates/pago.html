@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block titulo %}Pago · Componentes PC{% endblock %}
+
+{% block encabezado %}<header class="page-head"><h1>Finalizar compra</h1><p>Paso final: datos de envío y método de pago.</p></header>{% endblock %}
+
+{% block contenido %}
+<form method="post" action="{{ url_for('pago') }}" class="row g-4" novalidate id="form-pago" autocomplete="on">
+  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+  <div class="col-lg-7">
+    <section class="panel mb-4">
+      <h2 class="panel-title"><span class="step">1</span> Datos de envío</h2>
+      <div class="row g-3">
+        <div class="col-12"><label class="form-label" for="nombre">Nombre completo</label>
+          <input class="form-control" id="nombre" name="nombre" maxlength="80" required autocomplete="name" value="{{ form.get('nombre', usuario.nombre if usuario else '') }}"></div>
+        <div class="col-md-6"><label class="form-label" for="telefono">Teléfono (10 dígitos)</label>
+          <input class="form-control" id="telefono" name="telefono" inputmode="numeric" maxlength="14" required autocomplete="tel" value="{{ form.get('telefono', '') }}"></div>
+        <div class="col-md-6"><label class="form-label" for="cp">Código postal</label>
+          <input class="form-control" id="cp" name="cp" inputmode="numeric" maxlength="5" required autocomplete="postal-code" value="{{ form.get('cp', '') }}"></div>
+        <div class="col-12"><label class="form-label" for="direccion">Dirección</label>
+          <input class="form-control" id="direccion" name="direccion" maxlength="150" required autocomplete="street-address" placeholder="Calle, número, colonia" value="{{ form.get('direccion', '') }}"></div>
+        <div class="col-12"><label class="form-label" for="ciudad">Ciudad y estado</label>
+          <input class="form-control" id="ciudad" name="ciudad" maxlength="60" required autocomplete="address-level2" value="{{ form.get('ciudad', '') }}"></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2 class="panel-title"><span class="step">2</span> Método de pago</h2>
+      <div class="pay-options" role="radiogroup" aria-label="Método de pago">
+        {% set metodo = form.get('metodo', 'tarjeta') %}
+        <label class="pay-opt"><input type="radio" name="metodo" value="tarjeta" {% if metodo == 'tarjeta' %}checked{% endif %}><span><strong>Tarjeta</strong><small>Crédito o débito</small></span></label>
+        <label class="pay-opt"><input type="radio" name="metodo" value="transferencia" {% if metodo == 'transferencia' %}checked{% endif %}><span><strong>Transferencia</strong><small>SPEI</small></span></label>
+        <label class="pay-opt"><input type="radio" name="metodo" value="oxxo" {% if metodo == 'oxxo' %}checked{% endif %}><span><strong>Efectivo</strong><small>Pago en tienda</small></span></label>
+      </div>
+
+      <div id="bloque-tarjeta" class="row g-3 mt-1">
+        <div class="col-12"><label class="form-label" for="titular">Titular de la tarjeta</label>
+          <input class="form-control" id="titular" name="titular" maxlength="80" autocomplete="cc-name" value="{{ form.get('titular', '') }}"></div>
+        <div class="col-12"><label class="form-label" for="tarjeta">Número de tarjeta</label>
+          <input class="form-control" id="tarjeta" name="tarjeta" inputmode="numeric" maxlength="23" placeholder="0000 0000 0000 0000" autocomplete="cc-number"></div>
+        <div class="col-6"><label class="form-label" for="vence">Vencimiento</label>
+          <input class="form-control" id="vence" name="vence" placeholder="MM/AA" maxlength="5" autocomplete="cc-exp" value="{{ form.get('vence', '') }}"></div>
+        <div class="col-6"><label class="form-label" for="cvv">CVV</label>
+          <input class="form-control" id="cvv" name="cvv" inputmode="numeric" maxlength="4" autocomplete="cc-csc" type="password"></div>
+      </div>
+      <p id="aviso-transfer" class="note d-none">Al confirmar te daremos una referencia para pagar por transferencia. El pedido se procesa al recibir el pago.</p>
+      <p id="aviso-oxxo" class="note d-none">Al confirmar te daremos una referencia para pagar en efectivo en tienda. El pedido se procesa al recibir el pago.</p>
+      <p class="demo-note">🔒 Modo demostración: el pago es simulado. No se cobra nada y solo se guardan los últimos 4 dígitos de la tarjeta.</p>
+    </section>
+  </div>
+
+  <div class="col-lg-5">
+    <aside class="panel summary sticky-lg-top" style="top: 6rem">
+      <h2>Tu pedido</h2>
+      <ul class="list-unstyled order-lines">
+        {% for l in lineas %}
+        <li><span>{{ l.cantidad }} × {{ l.articulo.nombre }}</span><span>{{ l.importe|dinero }}</span></li>
+        {% endfor %}
+      </ul>
+      <dl>
+        <div><dt>Subtotal</dt><dd>{{ subtotal|dinero }}</dd></div>
+        <div><dt>Envío</dt><dd>{% if envio == 0 %}<span class="text-success fw-semibold">Gratis</span>{% else %}{{ envio|dinero }}{% endif %}</dd></div>
+        <div class="grand"><dt>Total</dt><dd>{{ total|dinero }}</dd></div>
+      </dl>
+      <button class="btn btn-primary btn-lg w-100" type="submit">Confirmar y pagar {{ total|dinero }}</button>
+      <a class="btn btn-link w-100 text-secondary" href="{{ url_for('carrito') }}">← Volver al carrito</a>
+    </aside>
+  </div>
+</form>
+
+<script>
+(function () {
+  var radios = document.querySelectorAll('input[name="metodo"]');
+  function actualizar() {
+    var m = document.querySelector('input[name="metodo"]:checked').value;
+    document.getElementById('bloque-tarjeta').classList.toggle('d-none', m !== 'tarjeta');
+    document.getElementById('aviso-transfer').classList.toggle('d-none', m !== 'transferencia');
+    document.getElementById('aviso-oxxo').classList.toggle('d-none', m !== 'oxxo');
+  }
+  radios.forEach(function (r) { r.addEventListener('change', actualizar); });
+  actualizar();
+  var t = document.getElementById('tarjeta');
+  t.addEventListener('input', function () {
+    t.value = t.value.replace(/\D/g, '').slice(0, 19).replace(/(.{4})/g, '$1 ').trim();
+  });
+  var v = document.getElementById('vence');
+  v.addEventListener('input', function () {
+    var d = v.value.replace(/\D/g, '').slice(0, 4);
+    v.value = d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
+  });
+})();
+</script>
+{% endblock %}

@@ -3,53 +3,124 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Componentes de PC</title>
+  <title>{% block titulo %}GLITCH · Tienda de hardware{% endblock %}</title>
+  <meta name="description" content="Tienda en línea de componentes de PC: procesadores, tarjetas gráficas, memorias y más.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='bootstrap/css/bootstrap.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='estilos.css') }}">
 </head>
 <body>
-  <nav class="navbar navbar-expand-lg bg-dark" data-bs-theme="dark" aria-label="Menú principal">
+  <div class="topbar">Envío gratis en compras desde {{ envio_gratis|dinero }} · Pago seguro · Garantía en todos los componentes</div>
+
+  <nav class="navbar navbar-expand-lg site-nav sticky-top" data-bs-theme="dark" aria-label="Menú principal">
     <div class="container">
-      <a class="navbar-brand" href="{{ url_for('inicio') }}">
-        Componentes PC
+      <a class="navbar-brand brand" href="{{ url_for('inicio') }}">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg>
+        </span>
+        <span>GLITCH<span class="brand-accent">PC</span></span>
       </a>
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#menuPrincipal" aria-controls="menuPrincipal" aria-expanded="false" aria-label="Abrir o cerrar menú">
         <span class="navbar-toggler-icon"></span>
       </button>
       <div class="collapse navbar-collapse" id="menuPrincipal">
-        <ul class="navbar-nav ms-auto">
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('inicio') }}">Inicio</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('inicio') }}#registro">Registrar</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('inicio') }}#lista">Catálogo</a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="{{ url_for('ayuda') }}">Ayuda</a>
-          </li>
+        <ul class="navbar-nav mx-lg-auto">
+          <li class="nav-item"><a class="nav-link {% if request.endpoint == 'inicio' %}active{% endif %}" href="{{ url_for('inicio') }}">Inicio</a></li>
+          <li class="nav-item"><a class="nav-link {% if request.endpoint in ('productos','producto') %}active{% endif %}" href="{{ url_for('productos') }}">Productos</a></li>
+          <li class="nav-item"><a class="nav-link {% if request.endpoint == 'informacion' %}active{% endif %}" href="{{ url_for('informacion') }}">Información</a></li>
+          <li class="nav-item"><a class="nav-link {% if request.endpoint == 'ayuda' %}active{% endif %}" href="{{ url_for('ayuda') }}">Ayuda</a></li>
+          {% if usuario and usuario.rol == 'admin' %}
+          <li class="nav-item"><a class="nav-link {% if request.endpoint in ('admin','editar') %}active{% endif %}" href="{{ url_for('admin') }}">Administrar</a></li>
+          {% endif %}
         </ul>
+        <div class="nav-actions d-flex align-items-lg-center flex-column flex-lg-row gap-2">
+          {% if usuario %}
+          <div class="dropdown">
+            <button class="btn btn-ghost btn-sm dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+              <span class="avatar">{{ usuario.nombre[:1]|upper }}</span> {{ usuario.nombre.split(' ')[0] }}
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+              <li><a class="dropdown-item" href="{{ url_for('mis_pedidos') }}">Mis pedidos</a></li>
+              {% if usuario.rol == 'admin' %}<li><a class="dropdown-item" href="{{ url_for('admin') }}">Panel de productos</a></li>{% endif %}
+              <li><hr class="dropdown-divider"></li>
+              <li>
+                <form action="{{ url_for('logout') }}" method="post">
+                  <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+                  <button class="dropdown-item" type="submit">Cerrar sesión</button>
+                </form>
+              </li>
+            </ul>
+          </div>
+          {% else %}
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('login') }}">Iniciar sesión</a>
+          <a class="btn btn-primary btn-sm" href="{{ url_for('registro') }}">Crear cuenta</a>
+          {% endif %}
+          <a class="cart-btn" href="{{ url_for('carrito') }}" aria-label="Carrito, {{ carrito_total }} artículos">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="20" r="1.5"/><circle cx="18" cy="20" r="1.5"/><path d="M2 3h3l2.7 11.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 7H6"/></svg>
+            {% if carrito_total %}<span class="cart-count">{{ carrito_total }}</span>{% endif %}
+          </a>
+        </div>
       </div>
     </div>
   </nav>
 
-  <main class="container py-4">
-    <header class="mb-4">
-      <p class="text-uppercase text-secondary small mb-1">
-        Proyecto · Componentes de PC
-      </p>
-      <h1 class="h2">Catálogo de componentes</h1>
-      <p class="text-secondary">Consulta y organiza los datos del mercado de hardware e inflación.</p>
-    </header>
+  {% with mensajes = get_flashed_messages(with_categories=true) %}
+  {% if mensajes %}
+  <div class="container toast-zone" aria-live="polite">
+    {% for cat, texto in mensajes %}
+    <div class="alert alert-{{ cat }} alert-dismissible fade show shadow-sm" role="alert">
+      {{ texto }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Cerrar"></button>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  {% endwith %}
 
+  {% block hero %}{% endblock %}
+
+  <main class="container py-4 py-lg-5">
+    {% block encabezado %}{% endblock %}
     {% block contenido %}{% endblock %}
   </main>
 
-  <footer class="text-center py-3 text-muted">
-    Laboratorio de Aplicaciones Web · Proyecto Componentes v1.1
-</footer>
+  <footer class="site-footer">
+    <div class="container">
+      <div class="row g-4">
+        <div class="col-lg-4">
+          <div class="brand mb-2"><span>Componentes<span class="brand-accent">PC</span></span></div>
+          <p class="small mb-0">Hardware para armar, mejorar y optimizar tu computadora, con precios claros y envíos a todo México.</p>
+        </div>
+        <div class="col-6 col-lg-2">
+          <h4>Tienda</h4>
+          <ul class="list-unstyled small">
+            <li><a href="{{ url_for('productos') }}">Todos los productos</a></li>
+            <li><a href="{{ url_for('productos', categoria='GPU') }}">Tarjetas gráficas</a></li>
+            <li><a href="{{ url_for('productos', categoria='CPU') }}">Procesadores</a></li>
+          </ul>
+        </div>
+        <div class="col-6 col-lg-2">
+          <h4>Cuenta</h4>
+          <ul class="list-unstyled small">
+            <li><a href="{{ url_for('login') }}">Iniciar sesión</a></li>
+            <li><a href="{{ url_for('mis_pedidos') }}">Mis pedidos</a></li>
+            <li><a href="{{ url_for('carrito') }}">Carrito</a></li>
+          </ul>
+        </div>
+        <div class="col-lg-4">
+          <h4>Ayuda</h4>
+          <ul class="list-unstyled small">
+            <li><a href="{{ url_for('informacion') }}">Envíos, garantía y devoluciones</a></li>
+            <li><a href="{{ url_for('ayuda') }}">Cómo comprar</a></li>
+          </ul>
+        </div>
+      </div>
+      <hr>
+      <p class="small mb-0 text-center">Laboratorio de Aplicaciones Web · Proyecto Componentes v2.0</p>
+    </div>
+  </footer>
   <script src="{{ url_for('static', filename='bootstrap/js/bootstrap.bundle.min.js') }}"></script>
 </body>
 </html>

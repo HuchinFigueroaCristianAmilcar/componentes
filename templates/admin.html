@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block titulo %}Administrar productos · Componentes PC{% endblock %}
+{% block encabezado %}<header class="page-head"><h1>Panel de productos</h1><p>Agrega, edita o elimina productos del catálogo.</p></header>{% endblock %}
+
+{% block contenido %}
+<section id="registro" class="panel mb-4">
+  <h2 class="panel-title">Agregar componente</h2>
+  <form action="{{ url_for('agregar') }}" method="POST" class="row g-3">
+    <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+    <div class="col-md-5">
+      <label for="nombre" class="form-label">Nombre del componente</label>
+      <input type="text" class="form-control" id="nombre" name="nombre" placeholder="Ej. RTX 4070 / Ryzen 7 7800X3D" required maxlength="80">
+    </div>
+    <div class="col-md-3">
+      <label for="categoria" class="form-label">Categoría</label>
+      <input type="text" class="form-control" id="categoria" name="categoria" placeholder="Ej. GPU, CPU, RAM" required maxlength="20" list="lista-cats">
+      <datalist id="lista-cats"><option>CPU</option><option>GPU</option><option>RAM</option><option>SSD</option><option>Motherboard</option><option>Fuente</option><option>Gabinete</option></datalist>
+    </div>
+    <div class="col-md-2">
+      <label for="precio" class="form-label">Precio (MXN)</label>
+      <input type="number" class="form-control" id="precio" name="precio" min="0" max="1000000" step="0.01" placeholder="0.00" value="0">
+    </div>
+    <div class="col-md-2">
+      <label for="estado" class="form-label">Estado</label>
+      <select class="form-select" id="estado" name="estado" required>
+        <option value="" disabled selected>Selecciona</option>
+        <option value="Disponible">Disponible</option>
+        <option value="Agotado">Agotado</option>
+      </select>
+    </div>
+    <div class="col-md-6">
+      <label for="descripcion" class="form-label">Descripción</label>
+      <input type="text" class="form-control" id="descripcion" name="descripcion" maxlength="400" placeholder="Características principales">
+    </div>
+    <div class="col-md-6">
+      <label for="imagen" class="form-label">URL de imagen <span class="text-secondary small">(opcional)</span></label>
+      <input type="url" class="form-control" id="imagen" name="imagen" maxlength="300" placeholder="https://…">
+    </div>
+    <div class="col-12 mt-3">
+      <button type="submit" class="btn btn-primary">Guardar componente</button>
+      <button type="reset" class="btn btn-ghost">Limpiar formulario</button>
+    </div>
+  </form>
+</section>
+
+<section id="lista" class="panel">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <h2 class="panel-title mb-0">Catálogo <span class="badge-count">{{ articulos|length }}</span></h2>
+    <form action="{{ url_for('admin_ejemplos') }}" method="post">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <button class="btn btn-ghost btn-sm" type="submit">Cargar productos de ejemplo</button>
+    </form>
+  </div>
+  <div class="table-responsive">
+    <table class="table align-middle tabla-tienda">
+      <caption class="visually-hidden">Catálogo de Componentes de PC</caption>
+      <thead>
+        <tr>
+          <th scope="col">Producto</th>
+          <th scope="col">Categoría</th>
+          <th scope="col">Precio</th>
+          <th scope="col">Estado</th>
+          <th scope="col" class="text-end">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in articulos %}
+        <tr>
+          <td><a href="{{ url_for('producto', id=item._id) }}" class="fw-semibold text-decoration-none">{{ item.nombre }}</a></td>
+          <td><span class="chip">{{ item.categoria }}</span></td>
+          <td>{% if item.get('precio') %}{{ item.precio|dinero }}{% else %}<span class="text-secondary">—</span>{% endif %}</td>
+          <td><span class="status {% if item.get('estado') == 'Disponible' %}status-on{% else %}status-off{% endif %}">{{ item.get('estado', 'Sin asignar') }}</span></td>
+          <td class="text-end text-nowrap">
+            <a href="{{ url_for('editar', id=item._id) }}" class="btn btn-sm btn-outline-warning me-1">Editar</a>
+            <form action="{{ url_for('eliminar', id=item._id) }}" method="POST" class="d-inline">
+              <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+              <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('¿Eliminar este producto?')">Eliminar</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-center text-muted py-4">Todavía no hay productos. Agrega el primero.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

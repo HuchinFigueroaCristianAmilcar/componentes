@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block titulo %}Iniciar sesión · Componentes PC{% endblock %}
+{% block contenido %}
+<div class="auth-wrap">
+  <div class="panel auth-card">
+    <h1>Iniciar sesión</h1>
+    <p class="text-secondary">Accede para pagar y ver tus pedidos.</p>
+    <form method="post" action="{{ url_for('login') }}">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <input type="hidden" name="next" value="{{ siguiente }}">
+      <div class="mb-3"><label class="form-label" for="email">Correo electrónico</label>
+        <input class="form-control" id="email" name="email" type="email" required autocomplete="email" value="{{ email }}" autofocus></div>
+      <div class="mb-3"><label class="form-label" for="password">Contraseña</label>
+        <input class="form-control" id="password" name="password" type="password" required autocomplete="current-password"></div>
+      <button class="btn btn-primary btn-lg w-100" type="submit">Entrar</button>
+    </form>
+    <p class="text-center small mt-3 mb-0">¿Eres nuevo? <a href="{{ url_for('registro') }}">Crea tu cuenta</a></p>
+  </div>
+</div>
+{% endblock %}
