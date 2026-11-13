@@ -1,3 +1,5 @@
 Flask>=3.1,<3.2
 pymongo>=4.10,<5
+segno>=1.6,<2
+tzdata
 gunicorn>=23,<24; platform_system != "Windows"
