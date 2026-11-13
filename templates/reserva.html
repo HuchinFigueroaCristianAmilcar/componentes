@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% block titulo %}Reserva {{ r.folio }} · Componentes PC{% endblock %}
+
+{% block contenido %}
+{% set temporal = r.estado == 'temporal' %}
+<div class="col-lg-9 mx-auto">
+  <div class="panel reserva">
+    <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+      <div>
+        <span class="chip">Reserva temporal</span>
+        <h1 class="reserva-folio mt-2">{{ r.folio }}</h1>
+      </div>
+      <span id="estado-reserva" class="status
+        {% if r.estado == 'confirmada' %}status-on{% elif temporal %}status-wait{% else %}status-off{% endif %}">
+        {{ {'temporal': 'Apartada · en espera', 'confirmada': 'Confirmada', 'cancelada': 'Cancelada', 'vencida': 'Vencida'}[r.estado] }}
+      </span>
+    </div>
+
+    <div class="row g-4">
+      <div class="col-md-7">
+        {% if temporal %}
+        <div class="contador-box" role="timer" aria-live="off">
+          <div class="contador-label">Tiempo restante</div>
+          <div id="contador" class="contador" data-segundos="{{ segundos }}"
+               data-total="{{ minutos * 60 }}" data-url="{{ url_for('api_reserva', folio=r.folio) }}">--:--</div>
+          <div class="progress" style="height:6px" aria-hidden="true">
+            <div id="barra" class="progress-bar" style="width:100%"></div>
+          </div>
+          <p class="small text-secondary mt-2 mb-0">
+            Si el tiempo termina, las unidades vuelven a estar disponibles para otras personas.
+          </p>
+        </div>
+        {% elif r.estado == 'confirmada' %}
+        <div class="note">✓ Reserva confirmada. Presenta este folio para recoger tu pedido.</div>
+        {% elif r.estado == 'cancelada' %}
+        <div class="note note-off">Esta reserva fue cancelada y las unidades se liberaron.</div>
+        {% else %}
+        <div class="note note-off">El tiempo terminó y la reserva venció. Las unidades se liberaron.</div>
+        {% endif %}
+
+        <div class="summary mt-3"><dl>
+          <div><dt>Producto</dt><dd><a href="{{ url_for('producto', id=r.recurso_id) }}">{{ r.recurso_nombre }}</a></dd></div>
+          <div><dt>Cantidad</dt><dd>{{ r.cantidad }}</dd></div>
+          <div><dt>Apartada</dt><dd>{{ r.creada_en|fecha_local }}</dd></div>
+          <div><dt>{{ 'Vence' if temporal else 'Vencimiento' }}</dt><dd>{{ r.expira_en|fecha_local }}</dd></div>
+          {% if r.get('cerrada_en') %}<div><dt>Cerrada</dt><dd>{{ r.cerrada_en|fecha_local }}</dd></div>{% endif %}
+        </dl></div>
+
+        {% if temporal and propia %}
+        <div class="d-flex gap-2 flex-wrap mt-3">
+          <form action="{{ url_for('reserva_confirmar', folio=r.folio) }}" method="post">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+            <button class="btn btn-primary" type="submit">Confirmar reserva</button>
+          </form>
+          <form action="{{ url_for('reserva_cancelar', folio=r.folio) }}" method="post">
+            <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+            <button class="btn btn-ghost" type="submit">Cancelar</button>
+          </form>
+        </div>
+        {% elif temporal %}
+        <p class="small text-secondary mt-3 mb-0">Solo la persona que hizo la reserva puede confirmarla o cancelarla.</p>
+        {% endif %}
+      </div>
+
+      <div class="col-md-5">
+        <div class="qr-box">
+          {% if qr_disponible %}
+          <img src="{{ url_for('qr_reserva', folio=r.folio) }}" width="220" height="220" alt="Código QR de la reserva {{ r.folio }}">
+          <p class="small text-secondary mt-2 mb-2">Escanéalo para abrir este comprobante con su estado actual.</p>
+          <a class="btn btn-ghost btn-sm" href="{{ url_for('qr_reserva', folio=r.folio) }}" download="qr-{{ r.folio }}.png">Descargar QR</a>
+          {% else %}
+          <p class="small text-secondary">El generador de QR no está instalado (agrega <code>segno</code> a requirements.txt).</p>
+          {% endif %}
+          <p class="qr-url small mt-2 mb-0">{{ url_qr }}</p>
+          {% if qr_local %}
+          <p class="small text-danger mt-2 mb-0">⚠ Este QR apunta a localhost y no abrirá desde un celular. Publica en Render o define APP_BASE_URL.</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+
+    <hr>
+    <div class="d-flex gap-2 flex-wrap">
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('mis_reservas') }}">Mis reservas</a>
+      <a class="btn btn-ghost btn-sm" href="{{ url_for('productos') }}">Seguir viendo productos</a>
+    </div>
+  </div>
+</div>
+
+{% if temporal %}
+<script>
+(function () {
+  var el = document.getElementById('contador');
+  var barra = document.getElementById('barra');
+  var total = parseInt(el.dataset.total, 10);
+  var fin = Date.now() + parseInt(el.dataset.segundos, 10) * 1000;
+  var consultando = false;
+
+  function pintar() {
+    var s = Math.max(0, Math.round((fin - Date.now()) / 1000));
+    el.textContent = String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+    barra.style.width = Math.min(100, (s / total) * 100) + '%';
+    if (s <= 0) { consultar(); }
+  }
+  // El servidor decide: si el estado cambió (venció, la cancelaron…), se recarga la página.
+  function consultar() {
+    if (consultando) { return; }
+    consultando = true;
+    fetch(el.dataset.url, { cache: 'no-store' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.estado !== 'temporal') { location.reload(); return; }
+        fin = Date.now() + d.segundos_restantes * 1000;
+      })
+      .catch(function () {})
+      .then(function () { setTimeout(function () { consultando = false; }, 2000); });
+  }
+  pintar();
+  setInterval(pintar, 500);
+  setInterval(consultar, 10000);
+})();
+</script>
+{% endif %}
+{% endblock %}

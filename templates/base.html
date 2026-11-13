@@ -29,6 +29,7 @@
         <ul class="navbar-nav mx-lg-auto">
           <li class="nav-item"><a class="nav-link {% if request.endpoint == 'inicio' %}active{% endif %}" href="{{ url_for('inicio') }}">Inicio</a></li>
           <li class="nav-item"><a class="nav-link {% if request.endpoint in ('productos','producto') %}active{% endif %}" href="{{ url_for('productos') }}">Productos</a></li>
+          <li class="nav-item"><a class="nav-link {% if request.endpoint in ('mis_reservas','reserva') %}active{% endif %}" href="{{ url_for('mis_reservas') }}">Mis reservas</a></li>
           <li class="nav-item"><a class="nav-link {% if request.endpoint == 'informacion' %}active{% endif %}" href="{{ url_for('informacion') }}">Información</a></li>
           <li class="nav-item"><a class="nav-link {% if request.endpoint == 'ayuda' %}active{% endif %}" href="{{ url_for('ayuda') }}">Ayuda</a></li>
           {% if usuario and usuario.rol == 'admin' %}
@@ -106,6 +107,7 @@
           <ul class="list-unstyled small">
             <li><a href="{{ url_for('login') }}">Iniciar sesión</a></li>
             <li><a href="{{ url_for('mis_pedidos') }}">Mis pedidos</a></li>
+            <li><a href="{{ url_for('mis_reservas') }}">Mis reservas</a></li>
             <li><a href="{{ url_for('carrito') }}">Carrito</a></li>
           </ul>
         </div>

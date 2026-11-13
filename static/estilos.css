@@ -177,3 +177,16 @@ section[id] { scroll-margin-top: 6rem; }
 .site-footer a { color: #b9c2dc; text-decoration: none; line-height: 2; } .site-footer a:hover { color: #fff; }
 .site-footer hr { border-color: rgba(255,255,255,.1); }
 .site-footer .brand { font-size: 1.2rem; }
+
+/* ---- Reserva temporal y QR ---- */
+.stock-line { font-weight: 500; margin-bottom: .75rem; }
+.reserve-form { margin-top: .75rem; }
+.reserva-folio { font-size: 1.9rem; font-weight: 700; letter-spacing: .02em; margin: 0; }
+.contador-box { background: color-mix(in srgb, var(--warn) 8%, white); border: 1px solid color-mix(in srgb, var(--warn) 35%, white); border-radius: var(--radius); padding: 1rem 1.25rem; }
+.contador-label { font-size: .78rem; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.contador { font-family: var(--font-head); font-size: 3rem; font-weight: 700; line-height: 1.1; font-variant-numeric: tabular-nums; margin-bottom: .5rem; }
+.contador-box .progress-bar { background: var(--warn); }
+.note-off { background: #fde4e9; color: #8f2237; border-color: #f6c2cd; }
+.qr-box { text-align: center; border: 1px dashed var(--line); border-radius: var(--radius); padding: 1rem; background: #fff; }
+.qr-box img { max-width: 100%; height: auto; image-rendering: pixelated; }
+.qr-url { word-break: break-all; color: var(--muted); }
