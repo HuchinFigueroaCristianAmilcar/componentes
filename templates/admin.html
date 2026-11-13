@@ -7,7 +7,7 @@
   <h2 class="panel-title">Agregar componente</h2>
   <form action="{{ url_for('agregar') }}" method="POST" class="row g-3">
     <input type="hidden" name="csrf" value="{{ csrf_token() }}">
-    <div class="col-md-5">
+    <div class="col-md-4">
       <label for="nombre" class="form-label">Nombre del componente</label>
       <input type="text" class="form-control" id="nombre" name="nombre" placeholder="Ej. RTX 4070 / Ryzen 7 7800X3D" required maxlength="80">
     </div>
@@ -19,6 +19,10 @@
     <div class="col-md-2">
       <label for="precio" class="form-label">Precio (MXN)</label>
       <input type="number" class="form-control" id="precio" name="precio" min="0" max="1000000" step="0.01" placeholder="0.00" value="0">
+    </div>
+    <div class="col-md-1">
+      <label for="existencias" class="form-label" title="Unidades libres para apartar">Stock</label>
+      <input type="number" class="form-control" id="existencias" name="existencias" min="0" max="9999" step="1" value="3">
     </div>
     <div class="col-md-2">
       <label for="estado" class="form-label">Estado</label>
@@ -59,6 +63,7 @@
           <th scope="col">Producto</th>
           <th scope="col">Categoría</th>
           <th scope="col">Precio</th>
+          <th scope="col">Stock libre</th>
           <th scope="col">Estado</th>
           <th scope="col" class="text-end">Acciones</th>
         </tr>
@@ -69,6 +74,7 @@
           <td><a href="{{ url_for('producto', id=item._id) }}" class="fw-semibold text-decoration-none">{{ item.nombre }}</a></td>
           <td><span class="chip">{{ item.categoria }}</span></td>
           <td>{% if item.get('precio') %}{{ item.precio|dinero }}{% else %}<span class="text-secondary">—</span>{% endif %}</td>
+          <td>{{ item.get('existencias', 0) }}</td>
           <td><span class="status {% if item.get('estado') == 'Disponible' %}status-on{% else %}status-off{% endif %}">{{ item.get('estado', 'Sin asignar') }}</span></td>
           <td class="text-end text-nowrap">
             <a href="{{ url_for('editar', id=item._id) }}" class="btn btn-sm btn-outline-warning me-1">Editar</a>
@@ -79,7 +85,7 @@
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="5" class="text-center text-muted py-4">Todavía no hay productos. Agrega el primero.</td></tr>
+        <tr><td colspan="6" class="text-center text-muted py-4">Todavía no hay productos. Agrega el primero.</td></tr>
         {% endfor %}
       </tbody>
     </table>

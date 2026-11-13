@@ -11,13 +11,17 @@
 <label for="nombre" class="form-label">Producto</label>
 <input id="nombre" name="nombre" class="form-control" value="{{ articulo.nombre }}" required maxlength="80">
 </div>
-<div class="col-md-6">
+<div class="col-md-3">
 <label for="categoria" class="form-label">Categoría</label>
 <input id="categoria" name="categoria" class="form-control" value="{{ articulo.categoria }}" required maxlength="20">
 </div>
 <div class="col-md-3">
 <label for="precio" class="form-label">Precio (MXN)</label>
 <input id="precio" name="precio" type="number" min="0" max="1000000" step="0.01" class="form-control" value="{{ articulo.get('precio', 0) }}">
+</div>
+<div class="col-md-3">
+<label for="existencias" class="form-label">Existencias libres</label>
+<input id="existencias" name="existencias" type="number" min="0" max="9999" step="1" class="form-control" value="{{ articulo.get('existencias', 0) }}">
 </div>
 <div class="col-md-3">
 <label for="estado" class="form-label">Estado</label>

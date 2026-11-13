@@ -1,18 +1,31 @@
 from flask import (
     Flask, render_template, request, redirect, url_for, abort, jsonify,
-    session, flash,
+    session, flash, Response,
 )
 from pymongo import MongoClient
 from pymongo.errors import PyMongoError
 from bson import ObjectId
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from functools import wraps
+from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import generate_password_hash, check_password_hash
+import io
 import os
 import re
 import secrets
+import threading
+import time
+
+try:  # Generador de códigos QR (pure Python). Se instala con requirements.txt
+    import segno
+except ImportError:  # pragma: no cover
+    segno = None
 
 app = Flask(__name__)
+
+# En Render la app va detrás de un proxy HTTPS: así request.url_root usa https://
+if os.environ.get("RENDER"):
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 # Clave para firmar las sesiones (login y carrito). Definela en Render.
 clave = os.environ.get("SECRET_KEY")
@@ -41,9 +54,24 @@ base_datos = cliente["componentes"]
 articulos = base_datos["articulos"]
 usuarios = base_datos["usuarios"]
 pedidos = base_datos["pedidos"]
+reservas = base_datos["reservas"]
 
 ENVIO_COSTO = 129.0
 ENVIO_GRATIS_DESDE = 2000.0
+
+# --- Reserva temporal -------------------------------------------------------
+# Modelo elegido: CANTIDAD. Cada producto tiene "existencias" (unidades libres).
+# Al reservar se descuentan de forma atómica; al cancelar o vencer se devuelven.
+def _minutos_reserva():
+    try:
+        minutos = int(os.environ.get("RESERVA_MINUTOS", "5"))
+    except ValueError:
+        minutos = 5
+    return min(5, max(3, minutos))  # la práctica pide entre 3 y 5 minutos
+
+RESERVA_MINUTOS = _minutos_reserva()
+RESERVA_MAX_UNIDADES = 5          # máximo de unidades por reserva
+EXISTENCIAS_INICIAL = 3           # para productos que aún no tienen existencias
 
 def leer_formulario(datos=None):
     if datos is None:
@@ -79,6 +107,17 @@ def leer_formulario(datos=None):
         if not isinstance(descripcion, str) or len(descripcion.strip()) > 400:
             abort(400, description="La descripción admite hasta 400 caracteres.")
         resultado["descripcion"] = descripcion.strip()
+    if "existencias" in datos:
+        bruto = datos.get("existencias")
+        if isinstance(bruto, bool) or not isinstance(bruto, (str, int)):
+            abort(400, description="Las existencias deben ser un número entero.")
+        try:
+            existencias = int(str(bruto).strip() or 0)
+        except ValueError:
+            abort(400, description="Las existencias deben ser un número entero.")
+        if not 0 <= existencias <= 9999:
+            abort(400, description="Las existencias deben estar entre 0 y 9,999.")
+        resultado["existencias"] = existencias
     if "imagen" in datos:
         imagen = datos.get("imagen")
         if not isinstance(imagen, str) or len(imagen.strip()) > 300:
@@ -209,11 +248,23 @@ def productos():
 
 @app.route("/producto/<id>")
 def producto(id):
-    articulo = buscar_articulo(id)
+    liberar_vencidas()  # primero se liberan las reservas cuyo tiempo ya terminó
+    articulo = buscar_articulo(id)  # y luego se consulta la disponibilidad actual
     relacionados = list(
         articulos.find({"categoria": articulo["categoria"], "_id": {"$ne": articulo["_id"]}}).limit(4)
     )
-    return render_template("producto.html", articulo=articulo, relacionados=relacionados)
+    apartadas = sum(
+        r["cantidad"] for r in reservas.find({"recurso_id": articulo["_id"], "estado": "temporal"})
+    )
+    mi_reserva = reservas.find_one(
+        {"recurso_id": articulo["_id"], "visitante_id": visitante_id(), "estado": "temporal"}
+    )
+    return render_template(
+        "producto.html", articulo=articulo, relacionados=relacionados,
+        disponibles=max(0, int(articulo.get("existencias", 0) or 0)),
+        apartadas=apartadas, mi_reserva=mi_reserva,
+        max_unidades=RESERVA_MAX_UNIDADES, minutos=RESERVA_MINUTOS,
+    )
 
 @app.route("/informacion")
 def informacion():
@@ -226,8 +277,11 @@ EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 def iniciar_sesion(u):
     siguiente_carrito = session.get("carrito", {})
+    visitante = session.get("visitante")
     session.clear()
     session["carrito"] = siguiente_carrito
+    if visitante:
+        session["visitante"] = visitante  # conserva sus reservas al iniciar sesión
     session["usuario_id"] = str(u["_id"])
     session["usuario_nombre"] = u["nombre"]
     session["usuario_rol"] = u.get("rol", "cliente")
@@ -285,7 +339,10 @@ def login():
 
 @app.route("/logout", methods=["POST"])
 def logout():
+    visitante = session.get("visitante")
     session.clear()
+    if visitante:
+        session["visitante"] = visitante
     flash("Cerraste sesión.", "info")
     return redirect(url_for("inicio"))
 
@@ -475,6 +532,241 @@ def mis_pedidos():
     return render_template("pedidos.html", pedidos=lista)
 
 # ---------------------------------------------------------------------------
+# Reserva temporal + código QR
+# ---------------------------------------------------------------------------
+# Estados: temporal -> confirmada | cancelada | vencida
+# La fecha de vencimiento (expira_en) se guarda en MongoDB. El contador de la
+# pantalla solo es informativo: quien decide si la reserva sigue vigente es el
+# servidor (Flask + Atlas). Cerrar la pestaña no deja el producto bloqueado.
+FOLIO_RE = re.compile(r"^RS-[0-9A-F]{8}$")
+
+class ReservaError(Exception):
+    pass
+
+def ahora():
+    """Hora UTC sin zona (como la guarda y devuelve PyMongo)."""
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+try:
+    from zoneinfo import ZoneInfo
+    ZONA = ZoneInfo(os.environ.get("ZONA_HORARIA", "America/Mexico_City"))
+except Exception:  # sin base de datos de zonas horarias (p. ej. Windows sin tzdata)
+    ZONA = timezone(timedelta(hours=-6))  # respaldo: hora del centro de México
+
+@app.template_filter("fecha_local")
+def filtro_fecha_local(valor):
+    if not isinstance(valor, datetime):
+        return "—"
+    return valor.replace(tzinfo=timezone.utc).astimezone(ZONA).strftime("%d/%m/%Y %H:%M:%S")
+
+def visitante_id():
+    """Identifica a la persona por su sesión (ventana normal vs. incógnito = A y B)."""
+    if "visitante" not in session:
+        session["visitante"] = secrets.token_hex(8)
+    return session["visitante"]
+
+def segundos_restantes(r):
+    if r.get("estado") != "temporal":
+        return 0
+    return max(0, int((r["expira_en"] - ahora()).total_seconds()))
+
+def devolver_existencias(r):
+    articulos.update_one({"_id": r["recurso_id"]}, {"$inc": {"existencias": r["cantidad"]}})
+
+def liberar_vencidas():
+    """Pasa a 'vencida' toda reserva temporal cuyo tiempo terminó y devuelve sus unidades.
+
+    Cada reserva cambia de estado con una sola operación atómica
+    (find_one_and_update), así que aunque lo ejecuten varios procesos a la vez
+    las unidades se devuelven una única vez.
+    """
+    corte = ahora()
+    liberadas = 0
+    while True:
+        r = reservas.find_one_and_update(
+            {"estado": "temporal", "expira_en": {"$lte": corte}},
+            {"$set": {"estado": "vencida", "cerrada_en": corte}},
+        )
+        if r is None:
+            return liberadas
+        devolver_existencias(r)
+        liberadas += 1
+
+def crear_reserva(articulo, cantidad):
+    """Devuelve (reserva, creada). Lanza ReservaError con un mensaje claro si no hay disponibilidad."""
+    visitante = visitante_id()
+    liberar_vencidas()
+    previa = reservas.find_one(
+        {"recurso_id": articulo["_id"], "visitante_id": visitante, "estado": "temporal"}
+    )
+    if previa:
+        return previa, False
+    # Descuento atómico: solo ocurre si todavía hay unidades suficientes. Si dos
+    # personas piden la última unidad al mismo tiempo, MongoDB deja pasar solo a una.
+    resultado = articulos.update_one(
+        {"_id": articulo["_id"], "estado": "Disponible", "existencias": {"$gte": cantidad}},
+        {"$inc": {"existencias": -cantidad}},
+    )
+    if resultado.modified_count != 1:
+        actual = articulos.find_one({"_id": articulo["_id"]})
+        if actual is None:
+            raise ReservaError("Este producto ya no existe.")
+        if actual.get("estado") != "Disponible":
+            raise ReservaError("Este producto no está disponible por ahora.")
+        libres = max(0, int(actual.get("existencias", 0) or 0))
+        if libres == 0:
+            raise ReservaError(
+                "No hay unidades disponibles: otra persona las tiene apartadas. "
+                "Vuelve a intentarlo si su reserva se cancela o vence."
+            )
+        raise ReservaError("Solo quedan %d unidad(es) disponibles." % libres)
+    inicio_ = ahora()
+    reserva_nueva = {
+        "folio": "RS-" + secrets.token_hex(4).upper(),
+        "recurso_id": articulo["_id"],
+        "recurso_nombre": articulo["nombre"],
+        "categoria": articulo.get("categoria", ""),
+        "visitante_id": visitante,
+        "usuario_id": session.get("usuario_id"),
+        "cantidad": cantidad,
+        "estado": "temporal",
+        "creada_en": inicio_,
+        "expira_en": inicio_ + timedelta(minutes=RESERVA_MINUTOS),
+    }
+    try:
+        reserva_nueva["_id"] = reservas.insert_one(reserva_nueva).inserted_id
+    except PyMongoError:
+        devolver_existencias(reserva_nueva)  # no dejar unidades bloqueadas si falla el guardado
+        raise
+    return reserva_nueva, True
+
+def buscar_reserva(folio):
+    folio = (folio or "").strip().upper()
+    r = reservas.find_one({"folio": folio}) if FOLIO_RE.match(folio) else None
+    if r is None:
+        abort(404, description="No existe una reserva con ese folio.")
+    return r
+
+def url_publica(folio):
+    """Dirección completa que va dentro del QR. Usa APP_BASE_URL si está definida."""
+    base = os.environ.get("APP_BASE_URL", "").strip().rstrip("/") or request.url_root.rstrip("/")
+    return base + url_for("reserva", folio=folio)
+
+def _con_hora_servidor(r):
+    return {"folio": r["folio"], "estado": r["estado"], "segundos_restantes": segundos_restantes(r)}
+
+@app.route("/reservar/<id>", methods=["POST"])
+def reservar(id):
+    articulo = buscar_articulo(id)
+    try:
+        cantidad = max(1, min(int(request.form.get("cantidad", 1)), RESERVA_MAX_UNIDADES))
+    except ValueError:
+        cantidad = 1
+    try:
+        r, creada = crear_reserva(articulo, cantidad)
+    except ReservaError as error:
+        flash(str(error), "warning")
+        return redirect(url_for("producto", id=id))
+    if creada:
+        flash("¡Listo! Apartamos %d × «%s» por %d minutos." % (cantidad, articulo["nombre"], RESERVA_MINUTOS), "success")
+    else:
+        flash("Ya tenías una reserva temporal de este producto; aquí está.", "info")
+    return redirect(url_for("reserva", folio=r["folio"]))
+
+@app.route("/reserva/<folio>")
+def reserva(folio):
+    """Comprobante público: es la página a la que apunta el código QR."""
+    liberar_vencidas()
+    r = buscar_reserva(folio)
+    propia = r["visitante_id"] == session.get("visitante")
+    direccion = url_publica(r["folio"])
+    return render_template(
+        "reserva.html", r=r, propia=propia, segundos=segundos_restantes(r),
+        minutos=RESERVA_MINUTOS, url_qr=direccion, qr_disponible=segno is not None,
+        qr_local=bool(re.match(r"^https?://(localhost|127\.|0\.0\.0\.0|\[::1\])", direccion, re.I)),
+    )
+
+@app.route("/reserva/<folio>/cancelar", methods=["POST"])
+def reserva_cancelar(folio):
+    liberar_vencidas()
+    r = buscar_reserva(folio)
+    cancelada = reservas.find_one_and_update(
+        {"folio": r["folio"], "visitante_id": visitante_id(), "estado": "temporal"},
+        {"$set": {"estado": "cancelada", "cerrada_en": ahora()}},
+    )
+    if cancelada:
+        devolver_existencias(cancelada)
+        flash("Reserva cancelada. Las unidades volvieron a estar disponibles.", "info")
+    else:
+        flash("Esta reserva ya no se puede cancelar (estado: %s)." % r["estado"], "warning")
+    return redirect(url_for("reserva", folio=r["folio"]))
+
+@app.route("/reserva/<folio>/confirmar", methods=["POST"])
+def reserva_confirmar(folio):
+    liberar_vencidas()
+    r = buscar_reserva(folio)
+    confirmada = reservas.find_one_and_update(
+        {"folio": r["folio"], "visitante_id": visitante_id(), "estado": "temporal",
+         "expira_en": {"$gt": ahora()}},
+        {"$set": {"estado": "confirmada", "cerrada_en": ahora()}},
+    )
+    if confirmada:
+        flash("¡Reserva confirmada! Presenta el folio %s para recoger tu pedido." % r["folio"], "success")
+    elif r["estado"] == "vencida":
+        flash("El tiempo terminó y la reserva venció. Puedes volver a apartar el producto.", "warning")
+    else:
+        flash("Esta reserva ya no se puede confirmar (estado: %s)." % r["estado"], "warning")
+    return redirect(url_for("reserva", folio=r["folio"]))
+
+@app.route("/mis-reservas")
+def mis_reservas():
+    liberar_vencidas()
+    lista = list(reservas.find({"visitante_id": visitante_id()}).sort("creada_en", -1).limit(30))
+    for r in lista:
+        r["segundos"] = segundos_restantes(r)
+    return render_template("reservas.html", reservas=lista, minutos=RESERVA_MINUTOS)
+
+@app.route("/qr/<folio>.png")
+def qr_reserva(folio):
+    if segno is None:
+        abort(404, description="El generador de QR no está instalado (falta segno en requirements.txt).")
+    r = buscar_reserva(folio)
+    codigo = segno.make(url_publica(r["folio"]), error="m")
+    salida = io.BytesIO()
+    codigo.save(salida, kind="png", scale=8, border=3)
+    return Response(salida.getvalue(), mimetype="image/png", headers={"Cache-Control": "no-store"})
+
+@app.route("/api/reservas/<folio>")
+def api_reserva(folio):
+    """Estado actual y segundos restantes según el servidor (lo consulta el contador)."""
+    liberar_vencidas()
+    return jsonify(_con_hora_servidor(buscar_reserva(folio)))
+
+def preparar_base():
+    """Índices y existencias iniciales. Es seguro repetirlo."""
+    try:
+        reservas.create_index("folio", unique=True)
+        reservas.create_index([("estado", 1), ("expira_en", 1)])
+        reservas.create_index([("visitante_id", 1), ("creada_en", -1)])
+        articulos.update_many(
+            {"existencias": {"$exists": False}}, {"$set": {"existencias": EXISTENCIAS_INICIAL}}
+        )
+    except PyMongoError as error:
+        print("Aviso: no se pudo preparar la base de datos:", error)
+
+def _barrido_periodico():
+    """Libera reservas vencidas aunque nadie tenga la página abierta."""
+    preparar_base()
+    while True:
+        time.sleep(20)
+        try:
+            liberar_vencidas()
+        except Exception:
+            pass
+
+threading.Thread(target=_barrido_periodico, daemon=True).start()
+
+# ---------------------------------------------------------------------------
 # Panel de administración: CRUD de productos (mismas rutas de siempre)
 # ---------------------------------------------------------------------------
 @app.route("/admin")
@@ -487,6 +779,7 @@ def admin():
 @admin_requerido
 def agregar():
     datos = leer_formulario()
+    datos.setdefault("existencias", EXISTENCIAS_INICIAL)
     articulos.insert_one(datos)
     flash("Producto agregado.", "success")
     return redirect(url_for("admin"))
@@ -511,17 +804,47 @@ def eliminar(id):
     return redirect(url_for("admin"))
 
 EJEMPLOS = [
+    # CPU
     ("AMD Ryzen 7 7800X3D", "CPU", 8499, "8 núcleos y 96 MB de caché 3D V-Cache. Ideal para gaming de alto rendimiento."),
+    ("AMD Ryzen 5 7600X", "CPU", 4699, "6 núcleos a hasta 5.3 GHz en socket AM5. Excelente para gaming y trabajo diario."),
+    ("AMD Ryzen 9 7950X", "CPU", 11999, "16 núcleos y 32 hilos para edición, render y multitarea extrema."),
     ("Intel Core i5-14600K", "CPU", 6299, "14 núcleos (6P + 8E) con desbloqueo para overclock. Gran equilibrio precio-rendimiento."),
+    ("Intel Core i7-14700K", "CPU", 9399, "20 núcleos y hasta 5.6 GHz. Potencia para jugar y crear contenido."),
+    ("Intel Core i3-12100F", "CPU", 1799, "4 núcleos, socket LGA1700. La opción económica para armar tu primera PC."),
+    # GPU
+    ("NVIDIA GeForce RTX 4060", "GPU", 7499, "8 GB GDDR6, DLSS 3 y bajo consumo para 1080p a máxima calidad."),
     ("NVIDIA GeForce RTX 4070 Super", "GPU", 15999, "12 GB GDDR6X, DLSS 3 y ray tracing para 1440p fluido."),
+    ("NVIDIA GeForce RTX 4080 Super", "GPU", 24999, "16 GB GDDR6X para 4K con trazado de rayos."),
+    ("AMD Radeon RX 7600", "GPU", 5499, "8 GB GDDR6 con RDNA 3. Muy buena relación precio-rendimiento en 1080p."),
     ("AMD Radeon RX 7800 XT", "GPU", 12499, "16 GB GDDR6 y arquitectura RDNA 3. Excelente en 1440p."),
-    ("Kingston Fury Beast 32GB DDR5", "RAM", 2399, "Kit 2x16 GB a 6000 MHz con perfil XMP 3.0."),
+    ("AMD Radeon RX 7900 XTX", "GPU", 21999, "24 GB GDDR6 para jugar en 4K sin concesiones."),
+    # RAM
     ("Corsair Vengeance 16GB DDR4", "RAM", 899, "Kit 2x8 GB a 3200 MHz, compatible con la mayoría de plataformas."),
-    ("Samsung 980 Pro 1TB NVMe", "SSD", 2299, "PCIe 4.0 con lecturas de hasta 7,000 MB/s."),
+    ("Kingston Fury Beast 32GB DDR4", "RAM", 1399, "Kit 2x16 GB a 3600 MHz con perfil XMP."),
+    ("Kingston Fury Beast 32GB DDR5", "RAM", 2399, "Kit 2x16 GB a 6000 MHz con perfil XMP 3.0."),
+    ("G.Skill Trident Z5 RGB 32GB DDR5", "RAM", 2999, "Kit 2x16 GB a 6400 MHz con iluminación RGB."),
+    ("Crucial 64GB DDR5 5600", "RAM", 4399, "Kit 2x32 GB para estaciones de trabajo y edición pesada."),
+    # SSD
     ("WD Blue SN580 500GB", "SSD", 899, "NVMe PCIe 4.0 económico para sistema y aplicaciones."),
+    ("Kingston NV2 1TB", "SSD", 1199, "NVMe PCIe 4.0 con hasta 3,500 MB/s de lectura."),
+    ("Samsung 980 Pro 1TB NVMe", "SSD", 2299, "PCIe 4.0 con lecturas de hasta 7,000 MB/s."),
+    ("Samsung 990 Pro 2TB NVMe", "SSD", 4499, "PCIe 4.0 de alto rendimiento para juegos y trabajo profesional."),
+    ("Crucial MX500 1TB SATA", "SSD", 1399, "SSD SATA fiable para renovar equipos antiguos."),
+    # Motherboard
     ("ASUS TUF B650-PLUS WiFi", "Motherboard", 4399, "Socket AM5, DDR5, WiFi 6 y PCIe 5.0."),
+    ("MSI MAG B760 Tomahawk WiFi", "Motherboard", 4199, "Socket LGA1700, DDR5, WiFi 6E y gran disipación VRM."),
+    ("Gigabyte B550 Aorus Elite", "Motherboard", 2699, "Socket AM4, DDR4 y PCIe 4.0. Ideal para actualizar un Ryzen 5000."),
+    ("ASUS ROG Strix Z790-E", "Motherboard", 8999, "Placa premium LGA1700 con DDR5, WiFi 6E y PCIe 5.0."),
+    # Fuente
+    ("EVGA 600 W1 600W", "Fuente", 899, "80 Plus White para equipos de gama básica."),
+    ("Corsair CX650M 650W", "Fuente", 1499, "80 Plus Bronze semimodular para equipos de gama media."),
     ("Corsair RM850e 850W", "Fuente", 2699, "80 Plus Gold, modular y silenciosa. Compatible con ATX 3.0."),
+    ("Seasonic Focus GX-1000 1000W", "Fuente", 3999, "80 Plus Gold totalmente modular para configuraciones de alto consumo."),
+    # Gabinete
     ("NZXT H5 Flow", "Gabinete", 1799, "Torre media con excelente flujo de aire y gestión de cables."),
+    ("Cooler Master MasterBox Q300L", "Gabinete", 999, "Micro-ATX compacto con filtros de polvo magnéticos."),
+    ("Lian Li Lancool 216", "Gabinete", 2599, "Torre con dos ventiladores de 160 mm y panel de vidrio templado."),
+    ("Corsair 4000D Airflow", "Gabinete", 2299, "Torre media con frente perforado para máxima ventilación."),
 ]
 
 @app.route("/admin/ejemplos", methods=["POST"])
@@ -533,6 +856,8 @@ def admin_ejemplos():
             articulos.insert_one({
                 "nombre": nombre, "categoria": categoria, "estado": "Disponible",
                 "precio": float(precio), "descripcion": descripcion, "imagen": "",
+                # Pocas piezas en lo más caro: facilita probar que no se reserva de más
+                "existencias": 1 if precio >= 15000 else EXISTENCIAS_INICIAL,
             })
             nuevos += 1
     flash("Se cargaron %d productos de ejemplo." % nuevos, "success")
@@ -570,7 +895,8 @@ def producto_json(producto):
         "estado": producto["estado"],
         "precio": producto.get("precio", 0),
         "descripcion": producto.get("descripcion", ""),
-        "imagen": producto.get("imagen", "")
+        "imagen": producto.get("imagen", ""),
+        "existencias": producto.get("existencias", 0),
     }
 
 def leer_json():
@@ -583,6 +909,7 @@ def leer_json():
 def api_productos():
     if request.method == "POST":
         datos = leer_json()
+        datos.setdefault("existencias", EXISTENCIAS_INICIAL)
         resultado = articulos.insert_one(datos)
         producto = buscar_articulo(str(resultado.inserted_id))
         return jsonify(producto_json(producto)), 201

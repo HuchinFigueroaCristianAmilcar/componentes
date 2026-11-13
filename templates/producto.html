@@ -18,6 +18,12 @@
     <p>
       <span class="status {{ 'status-off' if agotado else 'status-on' }}">{{ articulo.get('estado', 'Sin asignar') }}</span>
     </p>
+    {% if not agotado %}
+    <p class="stock-line">
+      <strong>{{ disponibles }}</strong> {{ 'unidad disponible' if disponibles == 1 else 'unidades disponibles' }}
+      {% if apartadas %}<span class="text-secondary"> · {{ apartadas }} apartada{{ 's' if apartadas != 1 }} temporalmente por otras personas</span>{% endif %}
+    </p>
+    {% endif %}
     <p class="detail-desc">{{ articulo.get('descripcion') or 'Componente de alto rendimiento para tu equipo. Consulta nuestra sección de información para envíos y garantía.' }}</p>
     {% if not agotado and precio > 0 %}
     <form action="{{ url_for('carrito_agregar', id=articulo._id) }}" method="post" class="buy-form">
@@ -31,6 +37,25 @@
     </form>
     {% else %}
     <button class="btn btn-ghost btn-lg" disabled>No disponible por ahora</button>
+    {% endif %}
+    {% if mi_reserva %}
+    <div class="note mt-3">
+      Tienes <strong>{{ mi_reserva.cantidad }}</strong> unidad(es) apartada(s) de este producto.
+      <a href="{{ url_for('reserva', folio=mi_reserva.folio) }}">Ver reserva {{ mi_reserva.folio }}</a>
+    </div>
+    {% elif not agotado %}
+    <form action="{{ url_for('reservar', id=articulo._id) }}" method="post" class="buy-form reserve-form mt-3">
+      <input type="hidden" name="csrf" value="{{ csrf_token() }}">
+      <label for="cantidad-reserva" class="visually-hidden">Unidades a apartar</label>
+      <select id="cantidad-reserva" name="cantidad" class="form-select qty" {% if disponibles == 0 %}disabled{% endif %}>
+        {% for n in range(1, [disponibles, max_unidades]|min + 1) %}<option value="{{ n }}">{{ n }}</option>{% endfor %}
+        {% if disponibles == 0 %}<option>0</option>{% endif %}
+      </select>
+      <button class="btn btn-ghost btn-lg" type="submit">Apartar {{ minutos }} min</button>
+    </form>
+    {% if disponibles == 0 %}
+    <p class="small text-secondary mt-2 mb-0">No quedan unidades libres: vuelve a revisar si alguna reserva se cancela o vence.</p>
+    {% endif %}
     {% endif %}
     <ul class="detail-perks list-unstyled">
       <li>🚚 Envío gratis desde {{ envio_gratis|dinero }}</li>
